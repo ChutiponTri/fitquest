@@ -9,21 +9,30 @@ import { simulateHR, HR_REST } from '../utils/hrCalc'
 const COUNTDOWN_SECONDS = 3
 const REST_SECONDS = 5
 
-function useIsMobile() {
-  const [isMobile, setIsMobile] = useState(() => window.innerWidth < 700)
+function useLayout() {
+  const get = () => {
+    const w = window.innerWidth
+    const h = window.innerHeight
+    return { mobile: w < 700, portrait: h > w, w, h }
+  }
+  const [layout, setLayout] = useState(get)
   useEffect(() => {
-    const handler = () => setIsMobile(window.innerWidth < 700)
+    const handler = () => setLayout(get())
     window.addEventListener('resize', handler)
-    return () => window.removeEventListener('resize', handler)
+    window.addEventListener('orientationchange', handler)
+    return () => {
+      window.removeEventListener('resize', handler)
+      window.removeEventListener('orientationchange', handler)
+    }
   }, [])
-  return isMobile
+  return layout
 }
 
 export function GameScreen({ playerConfig, onComplete }) {
   const { age, name } = playerConfig
   const canvasRef = useRef(null)
   const { videoRef, cameraReady, cameraError } = useCamera()
-  const isMobile = useIsMobile()
+  const { mobile: isMobile, portrait } = useLayout()
 
   const [gamePhase, setGamePhase] = useState('countdown')
   const [countdown, setCountdown] = useState(COUNTDOWN_SECONDS)
@@ -161,9 +170,11 @@ export function GameScreen({ playerConfig, onComplete }) {
       position: 'relative', background: '#000',
       display: 'flex', alignItems: 'center', justifyContent: 'center',
       overflow: 'hidden',
-      // Desktop: flex fills remaining space; Mobile: fixed aspect ratio
+      // Desktop: flex fills remaining space; Mobile landscape: ~56vw; Mobile portrait: ~62vh
       ...(isMobile
-        ? { width: '100%', height: '56vw', minHeight: 180, flexShrink: 0 }
+        ? portrait
+          ? { width: '100%', height: '62vh', flexShrink: 0 }
+          : { width: '100%', height: '56vw', minHeight: 180, flexShrink: 0 }
         : { flex: 1 })
     }}>
       <video
@@ -205,7 +216,7 @@ export function GameScreen({ playerConfig, onComplete }) {
       {gamePhase === 'countdown' && (
         <div style={{ position: 'absolute', inset: 0, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', background: 'rgba(5,10,20,0.72)' }}>
           <div style={{ fontSize: 10, letterSpacing: 4, color: 'var(--accent-cyan)', marginBottom: 8, textTransform: 'uppercase' }}>Get Ready</div>
-          <div style={{ fontSize: isMobile ? 80 : 130, fontWeight: 900, fontFamily: 'var(--font-mono)', color: countdown <= 1 ? '#aaff00' : 'var(--accent-cyan)', lineHeight: 1 }}>
+          <div style={{ fontSize: isMobile ? (portrait ? 100 : 80) : 130, fontWeight: 900, fontFamily: 'var(--font-mono)', color: countdown <= 1 ? '#aaff00' : 'var(--accent-cyan)', lineHeight: 1 }}>
             {countdown > 0 ? countdown : 'GO!'}
           </div>
           <div style={{ fontSize: 14, color: 'var(--text-muted)', marginTop: 8 }}>{currentEx?.name}</div>
@@ -272,7 +283,75 @@ export function GameScreen({ playerConfig, onComplete }) {
   )
 
   // ── Mobile HUD strip ───────────────────────────────────────────────────────
-  const mobileHUD = (
+  // portrait = stacked with bigger rep counter + exercise list always visible
+  // landscape = compact single bar with collapsible list
+  const mobileHUD = portrait ? (
+    // ── Portrait HUD ──────────────────────────────────────────────────────────
+    <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-card)', minHeight: 0 }}>
+      {/* HR + name row */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 14px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 6, background: 'rgba(255,82,82,0.12)', border: '1px solid rgba(255,82,82,0.3)', borderRadius: 8, padding: '6px 12px' }}>
+          <span style={{ fontSize: 14, color: '#ff5252', animation: 'pulse-ring 1s ease-in-out infinite' }}>♥</span>
+          <span style={{ fontFamily: 'var(--font-mono)', fontSize: 18, fontWeight: 700, color: '#ff5252' }}>{Math.round(hr)}</span>
+          <span style={{ fontSize: 10, color: 'var(--text-dim)' }}>bpm</span>
+        </div>
+        <div style={{ flex: 1 }} />
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--accent-cyan)' }}>{name}</span>
+        <span style={{ fontSize: 12, color: 'var(--text-dim)' }}>Age {age}</span>
+      </div>
+
+      {/* Big rep counter + exercise name */}
+      {currentEx && (
+        <div style={{ padding: '12px 14px', borderBottom: '1px solid var(--border)', background: `${currentEx.color}08`, flexShrink: 0 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 8 }}>
+            <span style={{ fontSize: 28 }}>{currentEx.icon}</span>
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ fontSize: 15, fontWeight: 700, color: currentEx.color }}>{currentEx.name}</div>
+              <div style={{ fontSize: 11, color: 'var(--text-muted)' }}>{currentEx.description}</div>
+            </div>
+            {/* Big rep counter */}
+            <div style={{ textAlign: 'right', flexShrink: 0 }}>
+              <span style={{ fontFamily: 'var(--font-mono)', fontSize: 40, fontWeight: 900, color: currentEx.color, lineHeight: 1 }}>{currentReps}</span>
+              <span style={{ fontSize: 14, color: 'var(--text-dim)' }}>/{currentEx.targetReps}</span>
+            </div>
+          </div>
+          {/* Progress bar */}
+          <div style={{ height: 6, background: 'rgba(255,255,255,0.07)', borderRadius: 3, overflow: 'hidden' }}>
+            <div style={{ height: '100%', width: `${repProgress}%`, background: `linear-gradient(90deg, ${currentEx.color}88, ${currentEx.color})`, borderRadius: 3, transition: 'width 0.3s' }} />
+          </div>
+          {/* Cues */}
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+            {currentEx.cues.map((cue, i) => (
+              <span key={i} style={{ fontSize: 11, color: 'var(--text-muted)', display: 'flex', gap: 3, alignItems: 'center' }}>
+                <span style={{ color: currentEx.color }}>›</span>{cue}
+              </span>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Exercise list — always visible in portrait, scrollable */}
+      <div style={{ flex: 1, padding: '8px 12px', overflowY: 'auto', display: 'flex', flexDirection: 'column', gap: 6 }}>
+        {EXERCISES.map((ex, i) => (
+          <ExerciseCard key={ex.id} exercise={ex}
+            isActive={i === currentExIdx && gamePhase === 'active'}
+            isComplete={(repCounts[ex.id] || 0) >= ex.targetReps}
+            repCount={repCounts[ex.id] || 0}
+          />
+        ))}
+      </div>
+
+      {/* Skip */}
+      {(gamePhase === 'active' || gamePhase === 'rest') && (
+        <div style={{ padding: '8px 12px', flexShrink: 0, borderTop: '1px solid var(--border)' }}>
+          <button onClick={skipExercise} style={{ width: '100%', padding: '8px', background: 'transparent', border: '1px solid var(--border)', borderRadius: 7, color: 'var(--text-dim)', fontSize: 11, letterSpacing: 1, textTransform: 'uppercase', fontFamily: 'var(--font-main)', cursor: 'pointer' }}>
+            Skip exercise →
+          </button>
+        </div>
+      )}
+    </div>
+  ) : (
+    // ── Landscape HUD (compact single bar) ────────────────────────────────────
     <div style={{ flex: 1, display: 'flex', flexDirection: 'column', overflow: 'hidden', background: 'var(--bg-card)', minHeight: 0 }}>
       {/* Top bar: HR + current exercise + menu toggle */}
       <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 10px', borderBottom: '1px solid var(--border)', flexShrink: 0 }}>
