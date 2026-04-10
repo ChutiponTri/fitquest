@@ -12,9 +12,9 @@ export function ResultsScreen({ results, playerName, age, onRestart }) {
 
   return (
     <div style={{
-      width: '100%', height: '100vh', display: 'flex',
+      width: '100%', minHeight: '100vh', display: 'flex',
       flexDirection: 'column', alignItems: 'center', justifyContent: 'center',
-      background: 'var(--bg-deep)', padding: 24, overflow: 'auto', position: 'relative'
+      background: 'var(--bg-deep)', padding: 24, overflowY: 'auto', position: 'relative'
     }}>
       {/* Stars background */}
       {[...Array(30)].map((_, i) => (

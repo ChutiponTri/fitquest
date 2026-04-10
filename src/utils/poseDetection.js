@@ -65,11 +65,11 @@ export function detectMarching(landmarks, prevState) {
 }
 
 export function detectMiniSquat(landmarks, prevState) {
-  return detectSquatGeneric(landmarks, prevState, { minAngle: 120, maxAngle: 170, label: 'mini squat' })
+  return detectSquatGeneric(landmarks, prevState, { minAngle: 140, maxAngle: 168, label: 'mini squat' })
 }
 
 export function detectSquat(landmarks, prevState) {
-  return detectSquatGeneric(landmarks, prevState, { minAngle: 80, maxAngle: 170, label: 'squat' })
+  return detectSquatGeneric(landmarks, prevState, { minAngle: 100, maxAngle: 165, label: 'squat' })
 }
 
 function detectSquatGeneric(landmarks, prevState, { minAngle, maxAngle, label }) {
@@ -84,14 +84,15 @@ function detectSquatGeneric(landmarks, prevState, { minAngle, maxAngle, label })
 
   const lAngle = getAngle(lHip, lKnee, lAnkle)
   const rAngle = getAngle(rHip, rKnee, rAnkle)
-  const kneeAngle = (lAngle + rAngle) / 2
+  // Use the smaller angle (deeper knee) to be more forgiving on one-sided detection
+  const kneeAngle = Math.min(lAngle, rAngle)
 
   let count = prevState.count || 0
   let phase = prevState.phase || 'standing'
   let detected = false
 
-  const isDown = kneeAngle < minAngle + 15
-  const isUp = kneeAngle > maxAngle - 10
+  const isDown = kneeAngle < minAngle
+  const isUp = kneeAngle > maxAngle - 5
 
   if (phase === 'standing' && isDown) {
     phase = 'squatting'
